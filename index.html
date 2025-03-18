@@ -2,184 +2,150 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>视频滑动展示与扫码解锁</title>
-
-  <!-- Html5Qrcode 库 -->
-  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>扫码解锁视频</title>
   <style>
-    body { margin: 0; background: #000; color: #fff; font-family: Arial, sans-serif; overflow: hidden; }
-    #loading { position: fixed; width: 100%; height: 100%; background: #000; display: flex; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.5s; }
-    .spinner { width: 60px; height: 60px; border: 8px solid rgba(255, 255, 255, 0.2); border-top: 8px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-
-    .slider { display: flex; height: 100%; transition: transform 0.5s ease; }
-    .slide { width: 100vw; height: 100vh; flex-shrink: 0; position: relative; }
-    video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-    .hint { position: absolute; bottom: 20px; width: 100%; text-align: center; color: rgba(255,255,255,0.8); font-size: 14px; }
-
-    #scanText { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 20px; z-index: 1000; cursor: pointer; background: rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 10px; }
-
-    #qr-reader { display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 300px; height: 300px; border: 2px solid #fff; background-color: #000; }
-
-    .custom-toast { position: fixed; bottom: 30%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 16px; z-index: 9999; animation: fadein 0.5s, fadeout 0.5s 1.5s; }
-    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes fadeout { from { opacity: 1; } to { opacity: 0; } }
-
-    .locked { filter: blur(10px); }
+    body { margin: 0; background: #000; color: #fff; overflow: hidden; font-family: Arial; }
+    .slider { display: flex; transition: transform 0.3s ease; height: 100vh; }
+    .slide { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    .locked-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; font-size: 20px; }
+    #scanButton { position: fixed; top: 20px; right: 20px; z-index: 9999; background: #fff; color: #000; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; }
+    #qr-reader { width: 300px; display: none; position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #fff; padding: 10px; }
+    .pagination { position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; gap: 8px; }
+    .dot { width: 10px; height: 10px; background: rgba(255,255,255,0.3); border-radius: 50%; }
+    .dot.active { background: #fff; }
   </style>
 </head>
 <body>
 
-  <div id="loading"><div class="spinner"></div></div>
+<button id="scanButton">扫码解锁</button>
 
-  <div id="scanText">📷 扫码解锁新角色</div>
-
-  <div class="slider" id="slider">
-    <div class="slide"><video id="video0" src="./videos/video1.mp4" muted autoplay loop playsinline></video><div class="hint">滑动查看</div></div>
-    <div class="slide"><video id="video1" src="./videos/video2.mp4" muted playsinline></video><div class="hint">扫码解锁</div></div>
-    <div class="slide"><video id="video2" src="./videos/video3.mp4" muted playsinline></video><div class="hint">扫码解锁</div></div>
-    <div class="slide"><video id="video3" src="./videos/video4.mp4" muted playsinline></video><div class="hint">扫码解锁</div></div>
+<div class="slider" id="slider">
+  <div class="slide">
+    <video id="video0" src="video1.mp4" muted playsinline autoplay loop></video>
   </div>
+  <div class="slide">
+    <video id="video1" src="video2.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+  <div class="slide">
+    <video id="video2" src="video3.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+  <div class="slide">
+    <video id="video3" src="video4.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+</div>
 
-  <div id="qr-reader"></div>
+<div class="pagination" id="pagination">
+  <div class="dot active"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
 
-  <script>
-    const loading = document.getElementById('loading');
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        loading.style.opacity = '0';
-        setTimeout(() => loading.style.display = 'none', 500);
-      }, 1000);
-    });
+<div id="qr-reader"></div>
 
-    const slider = document.getElementById('slider');
-    const slides = document.querySelectorAll('.slide');
-    let currentIndex = 0;
-    let isAnimating = false;
-    slider.style.width = slides.length * 100 + 'vw';
+<script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
+<script>
+  const unlockedVideos = [true, false, false, false];
+  const videos = [ 'video0', 'video1', 'video2', 'video3' ].map(id => document.getElementById(id));
+  const overlays = document.querySelectorAll('.locked-overlay');
+  const slider = document.getElementById('slider');
+  const dots = document.querySelectorAll('.dot');
+  const qrReaderEl = document.getElementById('qr-reader');
+  const scanButton = document.getElementById('scanButton');
 
-    const throttle = (fn, delay) => {
-      let lastTime = 0;
-      return (...args) => {
-        const now = Date.now();
-        if (now - lastTime >= delay) {
-          lastTime = now;
-          fn(...args);
-        }
-      };
-    };
+  let html5QrCode = new Html5Qrcode("qr-reader");
+  let scanning = false;
 
-    const handleScroll = throttle(e => {
-      if (isAnimating) return;
-      const delta = Math.sign(e.deltaY);
-      if (delta > 0 && currentIndex < slides.length - 1) currentIndex++;
-      else if (delta < 0 && currentIndex > 0) currentIndex--;
-      else return;
-      isAnimating = true;
-      slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
-      setTimeout(() => isAnimating = false, 500);
-    }, 500);
-
-    window.addEventListener('wheel', handleScroll);
-
-    let touchStartX = 0;
-    window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX, { passive: true });
-    window.addEventListener('touchend', e => {
-      const deltaX = touchStartX - e.changedTouches[0].clientX;
-      if (Math.abs(deltaX) > 50) handleScroll({ deltaY: deltaX });
-    }, { passive: true });
-
-    let unlockedVideos = JSON.parse(localStorage.getItem('unlockedVideos')) || [true, false, false, false];
-    const videos = [0, 1, 2, 3].map(i => document.getElementById(`video${i}`));
-
-    function updateVideoStates() {
-      videos.forEach((video, i) => {
-        if (unlockedVideos[i]) {
-          video.classList.remove('locked');
-          video.play().catch(() => {});
-        } else {
-          video.classList.add('locked');
-          video.pause();
-          video.currentTime = 0;
-        }
-      });
-      localStorage.setItem('unlockedVideos', JSON.stringify(unlockedVideos));
-    }
-
-    updateVideoStates();
-
-    function showMessage(msg) {
-      const toast = document.createElement('div');
-      toast.className = 'custom-toast';
-      toast.innerText = msg;
-      document.body.appendChild(toast);
-      setTimeout(() => document.body.removeChild(toast), 2000);
-    }
-
-    function isMobileDevice() {
-      return /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-    }
-
-    const scanText = document.getElementById('scanText');
-    let html5QrCode = null;
-
-    scanText.addEventListener('click', async () => {
-      console.log("点击扫码按钮");
-
-      if (!isMobileDevice()) {
-        showMessage("请使用手机扫码");
-        return;
-      }
-
-      if (html5QrCode) {
-        await html5QrCode.stop().catch(() => {});
-        html5QrCode.clear();
-      }
-
-      html5QrCode = new Html5Qrcode("qr-reader");
-
-      try {
-        const cameras = await Html5Qrcode.getCameras();
-        console.log("检测到摄像头:", cameras);
-
-        if (!cameras.length) {
-          showMessage("未检测到摄像头");
-          return;
-        }
-
-        document.getElementById('qr-reader').style.display = 'block';
-
-        html5QrCode.start(
-          { deviceId: { exact: cameras[0].id } },
-          { fps: 10, qrbox: 250 },
-          (qrCodeMessage) => {
-            console.log("扫码成功:", qrCodeMessage);
-
-            if (qrCodeMessage === "unlock2") unlockedVideos[1] = true;
-            if (qrCodeMessage === "unlock3") unlockedVideos[2] = true;
-            if (qrCodeMessage === "unlock4") unlockedVideos[3] = true;
-
-            updateVideoStates();
-
-            html5QrCode.stop().then(() => {
-              document.getElementById('qr-reader').style.display = 'none';
-              showMessage("解锁成功！");
-            }).catch(err => {
-              console.error("停止扫码器失败", err);
-            });
-          },
-          (errorMessage) => {
-            console.log("扫码中...", errorMessage);
-          }
-        );
-      } catch (err) {
-        console.error("启动扫码失败:", err);
-        showMessage("扫码启动失败，请检查 HTTPS 和摄像头权限");
+  function updateSlidesLock() {
+    videos.forEach((video, index) => {
+      if (unlockedVideos[index]) {
+        overlays[index]?.remove();
+        video.play();
+        video.loop = true;
+      } else {
+        video.pause();
+        video.currentTime = 0;
       }
     });
-  </script>
+  }
+
+  let startX = 0, currentIndex = 0, currentTranslate = 0;
+  const totalSlides = videos.length;
+
+  slider.addEventListener('touchstart', e => startX = e.touches[0].clientX);
+  slider.addEventListener('touchend', e => {
+    const diff = e.changedTouches[0].clientX - startX;
+    let nextIndex = currentIndex;
+
+    if (diff < -50) nextIndex++;
+    else if (diff > 50) nextIndex--;
+
+    if (nextIndex >= 0 && nextIndex < totalSlides && unlockedVideos[nextIndex]) {
+      currentIndex = nextIndex;
+    }
+
+    currentTranslate = -currentIndex * window.innerWidth;
+    slider.style.transition = 'transform 0.3s ease';
+    slider.style.transform = `translateX(${currentTranslate}px)`;
+    updateDots(currentIndex);
+  });
+
+  window.addEventListener('resize', () => {
+    currentTranslate = -currentIndex * window.innerWidth;
+    slider.style.transform = `translateX(${currentTranslate}px)`;
+  });
+
+  function updateDots(index) {
+    dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+  }
+
+  scanButton.addEventListener('click', () => {
+    if (scanning) return;
+
+    qrReaderEl.style.display = 'block';
+    scanning = true;
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      qrCodeMessage => {
+        console.log(`扫码成功: ${qrCodeMessage}`);
+
+        if (qrCodeMessage === "unlock2") {
+          unlockedVideos[1] = true;
+          alert("已解锁视频2！");
+        }
+        if (qrCodeMessage === "unlock3") {
+          unlockedVideos[2] = true;
+          alert("已解锁视频3！");
+        }
+        if (qrCodeMessage === "unlock4") {
+          unlockedVideos[3] = true;
+          alert("已解锁视频4！");
+        }
+
+        updateSlidesLock();
+
+        html5QrCode.stop().then(() => {
+          scanning = false;
+          qrReaderEl.style.display = 'none';
+        });
+      },
+      errorMessage => { /* 不处理重复扫码错误 */ }
+    ).catch(err => {
+      scanning = false;
+      console.error(`扫码失败: ${err}`);
+      alert('摄像头调用失败，请检查权限');
+    });
+  });
+
+  updateSlidesLock();
+</script>
 
 </body>
 </html>
