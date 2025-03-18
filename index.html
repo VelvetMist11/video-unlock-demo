@@ -1,151 +1,38 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>扫码解锁视频</title>
-  <style>
-    body { margin: 0; background: #000; color: #fff; overflow: hidden; font-family: Arial; }
-    .slider { display: flex; transition: transform 0.3s ease; height: 100vh; }
-    .slide { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
-    video { width: 100%; height: 100%; object-fit: cover; }
-    .locked-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; font-size: 20px; }
-    #scanButton { position: fixed; top: 20px; right: 20px; z-index: 9999; background: #fff; color: #000; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; }
-    #qr-reader { width: 300px; display: none; position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #fff; padding: 10px; }
-    .pagination { position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; gap: 8px; }
-    .dot { width: 10px; height: 10px; background: rgba(255,255,255,0.3); border-radius: 50%; }
-    .dot.active { background: #fff; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>手机摄像头测试</title>
 </head>
-<body>
+<body style="background: #000; color: #fff; text-align: center;">
+  <h2>摄像头测试</h2>
+  <video id="camera" autoplay playsinline style="width: 100%; max-width: 400px;"></video>
+  <p id="status">等待摄像头启动...</p>
 
-<button id="scanButton">扫码解锁</button>
+  <script>
+    async function startCamera() {
+      try {
+        const constraints = {
+          video: {
+            facingMode: 'environment' // 调用后置摄像头
+          },
+          audio: false
+        };
 
-<div class="slider" id="slider">
-  <div class="slide">
-    <video id="video0" src="video1.mp4" muted playsinline autoplay loop></video>
-  </div>
-  <div class="slide">
-    <video id="video1" src="video2.mp4" muted playsinline></video>
-    <div class="locked-overlay">请扫码解锁</div>
-  </div>
-  <div class="slide">
-    <video id="video2" src="video3.mp4" muted playsinline></video>
-    <div class="locked-overlay">请扫码解锁</div>
-  </div>
-  <div class="slide">
-    <video id="video3" src="video4.mp4" muted playsinline></video>
-    <div class="locked-overlay">请扫码解锁</div>
-  </div>
-</div>
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-<div class="pagination" id="pagination">
-  <div class="dot active"></div>
-  <div class="dot"></div>
-  <div class="dot"></div>
-  <div class="dot"></div>
-</div>
+        const video = document.getElementById('camera');
+        video.srcObject = stream;
 
-<div id="qr-reader"></div>
-
-<script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
-<script>
-  const unlockedVideos = [true, false, false, false];
-  const videos = [ 'video0', 'video1', 'video2', 'video3' ].map(id => document.getElementById(id));
-  const overlays = document.querySelectorAll('.locked-overlay');
-  const slider = document.getElementById('slider');
-  const dots = document.querySelectorAll('.dot');
-  const qrReaderEl = document.getElementById('qr-reader');
-  const scanButton = document.getElementById('scanButton');
-
-  let html5QrCode = new Html5Qrcode("qr-reader");
-  let scanning = false;
-
-  function updateSlidesLock() {
-    videos.forEach((video, index) => {
-      if (unlockedVideos[index]) {
-        overlays[index]?.remove();
-        video.play();
-        video.loop = true;
-      } else {
-        video.pause();
-        video.currentTime = 0;
+        document.getElementById('status').innerText = "摄像头已启动 ✅";
+      } catch (error) {
+        console.error("摄像头启动失败", error);
+        document.getElementById('status').innerText = "启动失败 ❌：" + error.message;
       }
-    });
-  }
-
-  let startX = 0, currentIndex = 0, currentTranslate = 0;
-  const totalSlides = videos.length;
-
-  slider.addEventListener('touchstart', e => startX = e.touches[0].clientX);
-  slider.addEventListener('touchend', e => {
-    const diff = e.changedTouches[0].clientX - startX;
-    let nextIndex = currentIndex;
-
-    if (diff < -50) nextIndex++;
-    else if (diff > 50) nextIndex--;
-
-    if (nextIndex >= 0 && nextIndex < totalSlides && unlockedVideos[nextIndex]) {
-      currentIndex = nextIndex;
     }
 
-    currentTranslate = -currentIndex * window.innerWidth;
-    slider.style.transition = 'transform 0.3s ease';
-    slider.style.transform = `translateX(${currentTranslate}px)`;
-    updateDots(currentIndex);
-  });
-
-  window.addEventListener('resize', () => {
-    currentTranslate = -currentIndex * window.innerWidth;
-    slider.style.transform = `translateX(${currentTranslate}px)`;
-  });
-
-  function updateDots(index) {
-    dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
-  }
-
-  scanButton.addEventListener('click', () => {
-    if (scanning) return;
-
-    qrReaderEl.style.display = 'block';
-    scanning = true;
-
-    html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      qrCodeMessage => {
-        console.log(`扫码成功: ${qrCodeMessage}`);
-
-        if (qrCodeMessage === "unlock2") {
-          unlockedVideos[1] = true;
-          alert("已解锁视频2！");
-        }
-        if (qrCodeMessage === "unlock3") {
-          unlockedVideos[2] = true;
-          alert("已解锁视频3！");
-        }
-        if (qrCodeMessage === "unlock4") {
-          unlockedVideos[3] = true;
-          alert("已解锁视频4！");
-        }
-
-        updateSlidesLock();
-
-        html5QrCode.stop().then(() => {
-          scanning = false;
-          qrReaderEl.style.display = 'none';
-        });
-      },
-      errorMessage => { /* 不处理重复扫码错误 */ }
-    ).catch(err => {
-      scanning = false;
-      console.error(`扫码失败: ${err}`);
-      alert('摄像头调用失败，请检查权限');
-    });
-  });
-
-  updateSlidesLock();
-</script>
-
+    startCamera();
+  </script>
 </body>
 </html>
