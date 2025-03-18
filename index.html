@@ -3,24 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>视频滑动展示</title>
+  <title>视频滑动展示与扫码解锁</title>
+  <!-- 引入 Html5Qrcode 库 -->
+  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
   <style>
-    /* 优化版CSS */
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-    }
-
+    /* 基本重置 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: Arial, sans-serif;
       background: #000;
       color: #fff;
       height: 100vh;
       overflow: hidden;
-      touch-action: pan-y; /* 优化触屏滑动 */
+      touch-action: pan-y;
     }
-
+    /* 加载动画 */
     #loading {
       position: fixed;
       width: 100%;
@@ -32,7 +29,6 @@
       z-index: 9999;
       transition: opacity 0.5s ease;
     }
-
     .spinner {
       border: 8px solid rgba(255, 255, 255, 0.1);
       border-top: 8px solid #fff;
@@ -41,32 +37,28 @@
       height: 60px;
       animation: spin 1s linear infinite;
     }
-
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
+    /* 滑动容器 */
     .slider {
       display: flex;
       height: 100%;
-      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* 更顺滑的贝塞尔曲线 */
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
     }
-
     .slide {
       width: 100vw;
       height: 100vh;
       flex-shrink: 0;
       position: relative;
     }
-
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      background: #000; /* 视频加载前的背景色 */
+      background: #000;
     }
-
     .hint {
       position: absolute;
       bottom: 20px;
@@ -74,36 +66,74 @@
       text-align: center;
       color: rgba(255,255,255,0.8);
       font-size: 14px;
-      pointer-events: none; /* 防止点击穿透 */
+      pointer-events: none;
     }
-
-    /* 移动端优化 */
     @media (pointer: coarse) {
-      .hint {
-        bottom: 40px;
-        font-size: 16px;
-      }
+      .hint { bottom: 40px; font-size: 16px; }
+    }
+    /* 扫码解锁提示文字（中下方大字） */
+    #scanText {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 24px;
+      z-index: 1000;
+      cursor: pointer;
+    }
+    /* 未解锁视频虚化 */
+    .slide video.locked {
+      filter: blur(10px);
+    }
+    /* QR扫描区域样式 */
+    #qr-reader {
+      display: none;
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 300px;
+      height: 300px;
+      border: 2px solid #fff;
     }
   </style>
 </head>
 <body>
+  <!-- 加载动画 -->
   <div id="loading">
     <div class="spinner"></div>
   </div>
-
+  
+  <!-- 扫码解锁提示文字 -->
+  <div id="scanText">📷 扫码解锁新角色</div>
+  
+  <!-- 视频滑动区域 -->
   <div class="slider" id="slider">
     <div class="slide">
-      <video src="./videos/video1.mp4" autoplay muted loop playsinline></video>
+      <video id="video0" src="./videos/video1.mp4" muted playsinline autoplay loop></video>
       <div class="hint">滑动查看下一个视频</div>
     </div>
     <div class="slide">
-      <video src="./videos/video2.mp4" autoplay muted loop playsinline></video>
-      <div class="hint">继续滑动探索更多</div>
+      <video id="video1" src="./videos/video2.mp4" muted playsinline></video>
+      <div class="hint">收集角色解锁</div>
+    </div>
+    <div class="slide">
+      <video id="video2" src="./videos/video3.mp4" muted playsinline></video>
+      <div class="hint">收集角色解锁</div>
+    </div>
+    <div class="slide">
+      <video id="video3" src="./videos/video4.mp4" muted playsinline></video>
+      <div class="hint">收集角色解锁</div>
     </div>
   </div>
-
+  
+  <!-- QR Code扫描器容器 -->
+  <div id="qr-reader"></div>
+  
   <script>
-    // 自动隐藏加载动画
+    // 加载完成后隐藏 loading 动画
     window.addEventListener('load', () => {
       setTimeout(() => {
         document.getElementById('loading').style.opacity = '0';
@@ -112,16 +142,15 @@
         }, 500);
       }, 1000);
     });
-
+    
     // 滑动控制逻辑
     const slider = document.getElementById('slider');
     let currentIndex = 0;
     let isAnimating = false;
-
-    // 动态计算容器宽度
-    slider.style.width = `${document.querySelectorAll('.slide').length * 100}vw`;
-
-    // 节流函数
+    const slides = document.querySelectorAll('.slide');
+    slider.style.width = slides.length * 100 + 'vw';
+    
+    // 节流函数，防止频繁触发
     const throttle = (fn, delay) => {
       let lastTime = 0;
       return (...args) => {
@@ -131,14 +160,12 @@
         fn(...args);
       };
     };
-
-    // 滚轮事件
+    
+    // 处理滚轮滑动
     const handleWheel = throttle((e) => {
       if (isAnimating) return;
-      
       const delta = Math.sign(e.deltaY);
-      const maxIndex = document.querySelectorAll('.slide').length - 1;
-
+      const maxIndex = slides.length - 1;
       if (delta > 0 && currentIndex < maxIndex) {
         currentIndex++;
       } else if (delta < 0 && currentIndex > 0) {
@@ -146,31 +173,90 @@
       } else {
         return;
       }
-
       isAnimating = true;
       slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
-      
       setTimeout(() => {
         isAnimating = false;
       }, 500);
     }, 500);
-
+    
     window.addEventListener('wheel', handleWheel);
-
+    
     // 触屏滑动
     let touchStartX = 0;
     window.addEventListener('touchstart', (e) => {
       touchStartX = e.touches[0].clientX;
     }, { passive: true });
-
+    
     window.addEventListener('touchend', (e) => {
       const touchEndX = e.changedTouches[0].clientX;
       const deltaX = touchStartX - touchEndX;
-      
       if (Math.abs(deltaX) > 50) {
         handleWheel({ deltaY: deltaX > 0 ? 1 : -1 });
       }
     }, { passive: true });
+    
+    // 持久化解锁状态：从 localStorage 获取或使用默认状态
+    let unlockedVideos = JSON.parse(localStorage.getItem('unlockedVideos')) || [true, false, false, false];
+    const videos = [
+      document.getElementById('video0'),
+      document.getElementById('video1'),
+      document.getElementById('video2'),
+      document.getElementById('video3')
+    ];
+    
+    function updateVideoStates() {
+      videos.forEach((video, index) => {
+        if (unlockedVideos[index]) {
+          video.classList.remove('locked');
+          video.play();
+        } else {
+          video.classList.add('locked');
+          video.pause();
+          video.currentTime = 0;
+        }
+      });
+      // 持久化保存状态
+      localStorage.setItem('unlockedVideos', JSON.stringify(unlockedVideos));
+    }
+    
+    updateVideoStates();
+    
+    // 扫码解锁逻辑
+    const scanText = document.getElementById('scanText');
+    scanText.addEventListener('click', () => {
+      // 显示扫码区域
+      document.getElementById('qr-reader').style.display = 'block';
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        qrCodeMessage => {
+          console.log(`扫码成功: ${qrCodeMessage}`);
+          // 根据扫码返回的内容解锁对应视频
+          if (qrCodeMessage === "unlock2") unlockedVideos[1] = true;
+          if (qrCodeMessage === "unlock3") unlockedVideos[2] = true;
+          if (qrCodeMessage === "unlock4") unlockedVideos[3] = true;
+          
+          updateVideoStates();
+          
+          // 扫码成功后停止扫码并隐藏扫码区域
+          html5QrCode.stop().then(() => {
+            document.getElementById('qr-reader').style.display = 'none';
+          }).catch(err => {
+            console.error("停止扫码失败:", err);
+          });
+        },
+        errorMessage => {
+          // 可选：处理扫码过程中的错误
+          console.warn(`扫码错误: ${errorMessage}`);
+        }
+      ).catch(err => {
+        console.error("启动扫码失败:", err);
+      });
+    });
   </script>
 </body>
 </html>
+
