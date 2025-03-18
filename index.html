@@ -19,9 +19,9 @@
     video { width: 100%; height: 100%; object-fit: cover; background: #000; }
     .hint { position: absolute; bottom: 20px; width: 100%; text-align: center; color: rgba(255,255,255,0.8); font-size: 14px; }
 
-    #scanText { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 20px; z-index: 1000; cursor: pointer; }
+    #scanText { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 20px; z-index: 1000; cursor: pointer; background: rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 10px; }
 
-    #qr-reader { display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 300px; height: 300px; border: 2px solid #fff; }
+    #qr-reader { display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 300px; height: 300px; border: 2px solid #fff; background-color: #000; }
 
     .custom-toast { position: fixed; bottom: 30%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 16px; z-index: 9999; animation: fadein 0.5s, fadeout 0.5s 1.5s; }
     @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
@@ -98,7 +98,7 @@
       videos.forEach((video, i) => {
         if (unlockedVideos[i]) {
           video.classList.remove('locked');
-          video.play().catch(() => {}); // 避免因未交互报错
+          video.play().catch(() => {});
         } else {
           video.classList.add('locked');
           video.pause();
@@ -123,29 +123,35 @@
     }
 
     const scanText = document.getElementById('scanText');
-    let html5QrCode; // 提前声明，避免多次 new
+    let html5QrCode = null;
 
     scanText.addEventListener('click', async () => {
+      console.log("点击扫码按钮");
+
       if (!isMobileDevice()) {
         showMessage("请使用手机扫码");
         return;
       }
 
+      if (html5QrCode) {
+        await html5QrCode.stop().catch(() => {});
+        html5QrCode.clear();
+      }
+
+      html5QrCode = new Html5Qrcode("qr-reader");
+
       try {
         const cameras = await Html5Qrcode.getCameras();
+        console.log("检测到摄像头:", cameras);
+
         if (!cameras.length) {
           showMessage("未检测到摄像头");
           return;
         }
 
-        if (html5QrCode) {
-          await html5QrCode.stop().catch(() => {});
-        }
-
-        html5QrCode = new Html5Qrcode("qr-reader");
         document.getElementById('qr-reader').style.display = 'block';
 
-        await html5QrCode.start(
+        html5QrCode.start(
           { deviceId: { exact: cameras[0].id } },
           { fps: 10, qrbox: 250 },
           (qrCodeMessage) => {
@@ -156,18 +162,21 @@
             if (qrCodeMessage === "unlock4") unlockedVideos[3] = true;
 
             updateVideoStates();
+
             html5QrCode.stop().then(() => {
               document.getElementById('qr-reader').style.display = 'none';
               showMessage("解锁成功！");
+            }).catch(err => {
+              console.error("停止扫码器失败", err);
             });
           },
           (errorMessage) => {
-            console.warn("扫码中...", errorMessage);
+            console.log("扫码中...", errorMessage);
           }
         );
       } catch (err) {
-        console.error("扫码启动失败", err);
-        showMessage("扫码启动失败，确认 HTTPS 和摄像头权限");
+        console.error("启动扫码失败:", err);
+        showMessage("扫码启动失败，请检查 HTTPS 和摄像头权限");
       }
     });
   </script>
