@@ -2,84 +2,175 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>视频滑动展示</title>
   <style>
-    /* 原有样式保持不变 */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { /* 样式保持不变 */ }
-    /* 其他原有样式保持不变... */
+    /* 优化版CSS */
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
 
-    /* 新增滑动过渡效果 */
+    body {
+      font-family: Arial, sans-serif;
+      background: #000;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+      touch-action: pan-y; /* 优化触屏滑动 */
+    }
+
+    #loading {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+
+    .spinner {
+      border: 8px solid rgba(255, 255, 255, 0.1);
+      border-top: 8px solid #fff;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     .slider {
       display: flex;
-      width: 200%; /* 根据实际视频数量调整（每个视频100%） */
       height: 100%;
-      transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* 更顺滑的贝塞尔曲线 */
+    }
+
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000; /* 视频加载前的背景色 */
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      font-size: 14px;
+      pointer-events: none; /* 防止点击穿透 */
+    }
+
+    /* 移动端优化 */
+    @media (pointer: coarse) {
+      .hint {
+        bottom: 40px;
+        font-size: 16px;
+      }
     }
   </style>
 </head>
 <body>
-
-<!-- 已移除加载动画 -->
-
-<!-- 滑动视频区域 -->
-<div class="slider" id="slider">
-  <div class="slide">
-    <video src="video1.mp4" autoplay muted loop></video>
-    <div class="hint">滑动查看下一个视频</div>
+  <div id="loading">
+    <div class="spinner"></div>
   </div>
-  <div class="slide">
-    <video src="video2.mp4" autoplay muted loop></video>
-    <div class="hint">继续滑动探索更多</div>
+
+  <div class="slider" id="slider">
+    <div class="slide">
+      <video src="./videos/video1.mp4" autoplay muted loop playsinline></video>
+      <div class="hint">滑动查看下一个视频</div>
+    </div>
+    <div class="slide">
+      <video src="./videos/video2.mp4" autoplay muted loop playsinline></video>
+      <div class="hint">继续滑动探索更多</div>
+    </div>
   </div>
-</div>
 
-<script>
-  // 移除加载页面相关代码
-  let currentIndex = 0;
-  const slider = document.getElementById('slider');
-  let startX = 0;
-  let isScrolling = false;
+  <script>
+    // 自动隐藏加载动画
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        document.getElementById('loading').style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('loading').style.display = 'none';
+        }, 500);
+      }, 1000);
+    });
 
-  // 触摸事件处理
-  function handleTouchStart(e) {
-    startX = e.touches[0].clientX;
-    isScrolling = true;
-  }
+    // 滑动控制逻辑
+    const slider = document.getElementById('slider');
+    let currentIndex = 0;
+    let isAnimating = false;
 
-  function handleTouchMove(e) {
-    if (!isScrolling) return;
-    const x = e.touches[0].clientX;
-    const diff = startX - x;
-    
-    // 实时跟随手指滑动
-    slider.style.transition = 'none';
-    slider.style.transform = `translateX(-${currentIndex * 100 + diff/4}%)`;
-  }
+    // 动态计算容器宽度
+    slider.style.width = `${document.querySelectorAll('.slide').length * 100}vw`;
 
-  function handleTouchEnd(e) {
-    if (!isScrolling) return;
-    isScrolling = false;
-    
-    const endX = e.changedTouches[0].clientX;
-    const diff = startX - endX;
-    slider.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    // 节流函数
+    const throttle = (fn, delay) => {
+      let lastTime = 0;
+      return (...args) => {
+        const now = new Date().getTime();
+        if (now - lastTime < delay) return;
+        lastTime = now;
+        fn(...args);
+      };
+    };
 
-    // 滑动阈值判断（超过屏幕1/4宽度触发）
-    if (Math.abs(diff) > window.innerWidth / 4) {
-      currentIndex = diff > 0 
-        ? Math.min(currentIndex + 1, slider.children.length - 1)
-        : Math.max(currentIndex - 1, 0);
-    }
-    
-    slider.style.transform = `translateX(-${currentIndex * 100}%)`;
-  }
+    // 滚轮事件
+    const handleWheel = throttle((e) => {
+      if (isAnimating) return;
+      
+      const delta = Math.sign(e.deltaY);
+      const maxIndex = document.querySelectorAll('.slide').length - 1;
 
-  // 事件监听
-  slider.addEventListener('touchstart', handleTouchStart);
-  slider.addEventListener('touchmove', handleTouchMove);
-  slider.addEventListener('touchend', handleTouchEnd);
-</script>
+      if (delta > 0 && currentIndex < maxIndex) {
+        currentIndex++;
+      } else if (delta < 0 && currentIndex > 0) {
+        currentIndex--;
+      } else {
+        return;
+      }
+
+      isAnimating = true;
+      slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
+      
+      setTimeout(() => {
+        isAnimating = false;
+      }, 500);
+    }, 500);
+
+    window.addEventListener('wheel', handleWheel);
+
+    // 触屏滑动
+    let touchStartX = 0;
+    window.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const deltaX = touchStartX - touchEndX;
+      
+      if (Math.abs(deltaX) > 50) {
+        handleWheel({ deltaY: deltaX > 0 ? 1 : -1 });
+      }
+    }, { passive: true });
+  </script>
 </body>
 </html>
