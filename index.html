@@ -1,38 +1,236 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>手机摄像头测试</title>
-</head>
-<body style="background: #000; color: #fff; text-align: center;">
-  <h2>摄像头测试</h2>
-  <video id="camera" autoplay playsinline style="width: 100%; max-width: 400px;"></video>
-  <p id="status">等待摄像头启动...</p>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>扫码解锁视频</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  <script>
-    async function startCamera() {
-      try {
-        const constraints = {
-          video: {
-            facingMode: 'environment' // 调用后置摄像头
-          },
-          audio: false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        const video = document.getElementById('camera');
-        video.srcObject = stream;
-
-        document.getElementById('status').innerText = "摄像头已启动 ✅";
-      } catch (error) {
-        console.error("摄像头启动失败", error);
-        document.getElementById('status').innerText = "启动失败 ❌：" + error.message;
-      }
+    body {
+      font-family: Arial, sans-serif;
+      background: #000;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    startCamera();
-  </script>
+    .slider {
+      display: flex;
+      width: 400%;
+      height: 100%;
+      transition: transform 0.3s ease;
+    }
+
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* 保持比例并填充整个屏幕 */
+    }
+
+    .locked-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 40px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      font-size: 14px;
+      z-index: 2;
+    }
+
+    /* 扫码按钮 */
+    #scanButton {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .pagination {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      transition: background 0.3s;
+    }
+
+    .dot.active {
+      background: #fff;
+    }
+
+    /* 扫码框 */
+    #qr-reader {
+      width: 300px;
+      height: 300px;
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: none;
+      border: 2px solid #fff;
+    }
+  </style>
+</head>
+<body>
+
+<!-- 扫码解锁按钮 -->
+<button id="scanButton">扫码解锁</button>
+
+<!-- 视频滑动容器 -->
+<div class="slider" id="slider">
+  <div class="slide">
+    <video id="video0" src="video1.mp4" muted playsinline></video>
+    <div class="hint">滑动查看下一个视频</div>
+  </div>
+  <div class="slide">
+    <video id="video1" src="video2.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+  <div class="slide">
+    <video id="video2" src="video3.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+  <div class="slide">
+    <video id="video3" src="video4.mp4" muted playsinline></video>
+    <div class="locked-overlay">请扫码解锁</div>
+  </div>
+</div>
+
+<!-- 分页指示器 -->
+<div class="pagination" id="pagination">
+  <div class="dot active"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+
+<!-- 扫码框 -->
+<div id="qr-reader"></div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
+<script>
+  const unlockedVideos = [true, false, false, false]; // 第一个视频默认解锁
+  const videos = [
+    document.getElementById('video0'),
+    document.getElementById('video1'),
+    document.getElementById('video2'),
+    document.getElementById('video3')
+  ];
+
+  const overlays = document.querySelectorAll('.locked-overlay');
+  const slider = document.getElementById('slider');
+  const dots = document.querySelectorAll('.dot');
+
+  // 初始化暂停未解锁视频
+  videos.forEach((video, index) => {
+    if (!unlockedVideos[index]) {
+      video.addEventListener('loadeddata', () => {
+        video.pause();
+        video.currentTime = 0; // 保持第一帧
+      });
+    }
+  });
+
+  function updateSlidesLock() {
+    videos.forEach((video, index) => {
+      if (unlockedVideos[index]) {
+        overlays[index]?.remove(); // 移除遮罩
+        video.loop = true;
+        video.autoplay = true;
+        video.muted = true;
+        video.play();
+      } else {
+        video.pause();
+        video.currentTime = 0;
+      }
+    });
+  }
+
+  // 分页指示器状态
+  function updateDots(index) {
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+    });
+  }
+
+  // 扫码逻辑
+  const html5QrCode = new Html5Qrcode("qr-reader");
+
+  document.getElementById('scanButton').addEventListener('click', () => {
+    document.getElementById('qr-reader').style.display = 'block';
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      qrCodeMessage => {
+        console.log(`扫码成功: ${qrCodeMessage}`);
+
+        if (qrCodeMessage === "unlock2") {
+          unlockedVideos[1] = true;
+          alert("已解锁视频2！");
+        }
+        if (qrCodeMessage === "unlock3") {
+          unlockedVideos[2] = true;
+          alert("已解锁视频3！");
+        }
+        if (qrCodeMessage === "unlock4") {
+          unlockedVideos[3] = true;
+          alert("已解锁视频4！");
+        }
+
+        updateSlidesLock();
+
+        html5QrCode.stop();
+        document.getElementById('qr-reader').style.display = 'none';
+      },
+      errorMessage => {
+        // 忽略错误
+      }
+    ).catch(err => {
+      console.error(`扫码失败: ${err}`);
+    });
+  });
+
+  updateSlidesLock(); // 初始执行
+</script>
+
 </body>
 </html>
