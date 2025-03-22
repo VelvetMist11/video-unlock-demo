@@ -49,7 +49,7 @@
     .slider {
       display: flex;
       height: 100%;
-      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* 更顺滑的贝塞尔曲线 */
+      transition: transform 0.5s ease; /* 修正滑动方式为跳跃 */
     }
 
     .slide {
@@ -124,6 +124,19 @@
     .indicator.active {
       background-color: #fff;
     }
+
+    /* 扫码扫码框样式 */
+    .qrScanner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      background-color: rgba(0, 0, 0, 0.7);
+      border-radius: 10px;
+      padding: 20px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -163,6 +176,9 @@
     <div class="indicator" id="indicator4"></div>
   </div>
 
+  <!-- 二维码扫码框 -->
+  <div class="qrScanner" id="qrScanner"></div>
+
   <!-- 引入二维码扫码库 -->
   <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
 
@@ -200,7 +216,7 @@
     // 滚轮事件
     const handleWheel = throttle((e) => {
       if (isAnimating) return;
-      
+
       const delta = Math.sign(e.deltaY);
       const maxIndex = document.querySelectorAll('.slide').length - 1;
 
@@ -213,7 +229,7 @@
       }
 
       isAnimating = true;
-      slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
+      slider.style.transform = `translateX(-${currentIndex * 100}vw)`;  // 跳跃式切换视频
 
       // 更新指示点
       indicators.forEach((indicator, index) => {
@@ -240,7 +256,7 @@
     window.addEventListener('touchend', (e) => {
       const touchEndX = e.changedTouches[0].clientX;
       const deltaX = touchStartX - touchEndX;
-      
+
       if (Math.abs(deltaX) > 50) {
         handleWheel({ deltaY: deltaX > 0 ? 1 : -1 });
       }
@@ -249,29 +265,27 @@
     // 扫码解锁功能
     let unlockedVideos = JSON.parse(localStorage.getItem('unlockedVideos')) || [];
 
-    function unlockVideo(videoId) {
-      const videoElement = document.querySelector(`.slide[data-video="${videoId}"] video`);
-      const slideElement = document.querySelector(`.slide[data-video="${videoId}"]`);
+    function unlockVideo(decodedText) {
+      if (unlockedVideos.includes(decodedText)) return;
 
-      if (!unlockedVideos.includes(videoId)) {
-        unlockedVideos.push(videoId);
-        localStorage.setItem('unlockedVideos', JSON.stringify(unlockedVideos));
-      }
+      unlockedVideos.push(decodedText);
+      localStorage.setItem('unlockedVideos', JSON.stringify(unlockedVideos));
 
-      // 解除虚化效果，解锁视频
-      videoElement.style.filter = 'none';
-      slideElement.style.filter = 'none';
+      // 更新视频显示效果
+      const video = document.querySelector(`.slide[data-video="${decodedText}"] video`);
+      video.style.filter = 'none';  // 解锁视频效果
+
+      // 关闭扫码框
+      document.getElementById('qrScanner').style.display = 'none';
     }
 
-    // 点击按钮扫描二维码解锁视频
     document.getElementById('qrCodeBtn').addEventListener('click', () => {
-      const qrCodeScanner = new Html5QrcodeScanner("qrCodeBtn", { fps: 10, qrbox: 250 });
-      
-      qrCodeScanner.render((decodedText) => {
+      const qrScanner = new Html5QrcodeScanner("qrScanner", { fps: 10, qrbox: 250 });
+      qrScanner.render((decodedText) => {
         unlockVideo(decodedText);
       }, (errorMessage) => {});
     });
-  </script>
 
+  </script>
 </body>
 </html>
