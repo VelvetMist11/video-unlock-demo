@@ -271,21 +271,22 @@
       unlockedVideos.push(decodedText);
       localStorage.setItem('unlockedVideos', JSON.stringify(unlockedVideos));
 
-      // 更新视频显示效果
+      // 解锁对应视频
       const video = document.querySelector(`.slide[data-video="${decodedText}"] video`);
-      video.style.filter = 'none';  // 解锁视频效果
+      video.style.filter = 'none';  // 解锁效果
 
       // 关闭扫码框
       document.getElementById('qrScanner').style.display = 'none';
     }
 
+    // 打开二维码扫码框
     document.getElementById('qrCodeBtn').addEventListener('click', () => {
       const qrScanner = new Html5QrcodeScanner("qrScanner", { fps: 10, qrbox: 250 });
+      document.getElementById('qrScanner').style.display = 'block';  // 显示扫码框
       qrScanner.render((decodedText) => {
         unlockVideo(decodedText);
       }, (errorMessage) => {});
     });
-
   </script>
 </body>
 </html>
