@@ -88,8 +88,8 @@
 
     /* 扫码按钮样式 */
     #qrCodeBtn {
-      position: fixed;
-      bottom: 40px;
+      position: absolute;
+      top: 20px;
       left: 50%;
       transform: translateX(-50%);
       font-size: 30px;
@@ -99,6 +99,30 @@
       border-radius: 5px;
       cursor: pointer;
       border: none;
+      z-index: 10;
+    }
+
+    /* 指示点样式 */
+    .indicator-container {
+      position: absolute;
+      bottom: 40px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      z-index: 10;
+    }
+
+    .indicator {
+      width: 10px;
+      height: 10px;
+      background-color: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transition: background-color 0.3s;
+    }
+
+    .indicator.active {
+      background-color: #fff;
     }
   </style>
 </head>
@@ -131,6 +155,14 @@
   <!-- 扫码按钮 -->
   <button id="qrCodeBtn">扫码解锁视频</button>
 
+  <!-- 指示点 -->
+  <div class="indicator-container" id="indicatorContainer">
+    <div class="indicator" id="indicator1"></div>
+    <div class="indicator" id="indicator2"></div>
+    <div class="indicator" id="indicator3"></div>
+    <div class="indicator" id="indicator4"></div>
+  </div>
+
   <!-- 引入二维码扫码库 -->
   <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
 
@@ -147,6 +179,7 @@
 
     // 滑动控制逻辑
     const slider = document.getElementById('slider');
+    const indicators = document.querySelectorAll('.indicator');
     let currentIndex = 0;
     let isAnimating = false;
 
@@ -181,7 +214,16 @@
 
       isAnimating = true;
       slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
-      
+
+      // 更新指示点
+      indicators.forEach((indicator, index) => {
+        if (index === currentIndex) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+
       setTimeout(() => {
         isAnimating = false;
       }, 500);
@@ -223,25 +265,11 @@
 
     // 点击按钮扫描二维码解锁视频
     document.getElementById('qrCodeBtn').addEventListener('click', () => {
-      const qrCodeScanner = new Html5QrcodeScanner('qrCodeReader', {
-        fps: 10,
-        qrbox: 250
-      });
-
+      const qrCodeScanner = new Html5QrcodeScanner("qrCodeBtn", { fps: 10, qrbox: 250 });
+      
       qrCodeScanner.render((decodedText) => {
-        const videoId = decodedText; // QR code stores the videoId (e.g., video1.mp4)
-        unlockVideo(videoId);
-        qrCodeScanner.clear();
-      });
-    });
-
-    // 检查每个视频是否解锁
-    document.querySelectorAll('.slide').forEach((slide) => {
-      const videoId = slide.getAttribute('data-video');
-      if (unlockedVideos.includes(videoId)) {
-        slide.querySelector('video').style.filter = 'none';
-        slide.style.filter = 'none';
-      }
+        unlockVideo(decodedText);
+      }, (errorMessage) => {});
     });
   </script>
 
