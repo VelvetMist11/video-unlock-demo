@@ -161,4 +161,74 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
 <script>
-  const unlockedVideos = [true, false, false, false
+  const unlockedVideos = [true, false, false, false];
+  const videos = document.querySelectorAll("video");
+  const overlays = document.querySelectorAll('.locked-overlay');
+  const slider = document.getElementById('slider');
+  const dots = document.querySelectorAll('.dot');
+  let currentIndex = 0;
+
+  function updateSlidesLock() {
+    videos.forEach((video, index) => {
+      if (unlockedVideos[index]) {
+        overlays[index]?.style.setProperty("display", "none", "important");
+        video.loop = true;
+        video.autoplay = true;
+        video.muted = true;
+        video.play();
+      } else {
+        video.pause();
+        video.currentTime = 0;
+      }
+    });
+  }
+
+  function updateDots(index) {
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+    });
+  }
+
+  dots.forEach((dot, i) => {
+    dot.addEventListener("click", () => {
+      if (unlockedVideos[i]) {
+        currentIndex = i;
+        slider.style.transform = `translateX(-${i * 100}vw)`;
+        updateDots(i);
+      }
+    });
+  });
+
+  const html5QrCode = new Html5Qrcode("qr-reader");
+
+  document.getElementById('scanButton').addEventListener('click', () => {
+    document.getElementById('qr-container').style.display = 'block';
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, qrCodeMessage => {
+      if (qrCodeMessage.startsWith("unlock")) {
+        let videoIndex = parseInt(qrCodeMessage.replace("unlock", ""), 10) - 1;
+        if (videoIndex >= 0 && videoIndex < videos.length) {
+          unlockedVideos[videoIndex] = true;
+          alert(`已解锁视频 ${videoIndex + 1}！`);
+          currentIndex = videoIndex;
+          slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
+          updateDots(currentIndex);
+        }
+      }
+      updateSlidesLock();
+      html5QrCode.stop();
+      document.getElementById('qr-container').style.display = 'none';
+    });
+  });
+
+  document.getElementById('closeScan').addEventListener('click', () => {
+    html5QrCode.stop();
+    document.getElementById('qr-container').style.display = 'none';
+    slider.style.transform = `translateX(-${currentIndex * 100}vw)`;
+    updateDots(currentIndex);
+  });
+
+  updateSlidesLock();
+</script>
+
+</body>
+</html>
