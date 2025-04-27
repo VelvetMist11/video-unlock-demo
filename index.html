@@ -1,115 +1,54 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>扫码解锁</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body, html { margin: 0; padding: 0; height: 100%; background: #000; }
-    #app { height: 100%; overflow: hidden; position: relative; }
-    #scanButton {
-      position: fixed; top: 20px; right: 20px; z-index: 1000;
-      background: #fff; color: #000; padding: 10px 15px; border: none; border-radius: 5px;
-    }
-    .slide {
-      width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center;
-    }
-    #qr-reader { width: 300px; height: 300px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; z-index: 2000; background: rgba(0,0,0,0.8); }
-    #closeScan { position: absolute; top: 5px; right: 5px; background: #fff; color: #000; border: none; padding: 5px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>全屏3D互动画廊</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
 </head>
 <body>
+    <div id="slider-container">
+        <div class="slide">
+            <canvas class="model-canvas" id="model0"></canvas>
+            <div class="locked-overlay">扫描解锁角色A</div>
+            <button class="scan-btn" data-target="0">扫码解锁</button>
+        </div>
+        <div class="slide">
+            <canvas class="model-canvas" id="model1"></canvas>
+            <div class="locked-overlay">扫描解锁角色B</div>
+            <button class="scan-btn" data-target="1">扫码解锁</button>
+        </div>
+        <div class="slide">
+            <canvas class="model-canvas" id="model2"></canvas>
+            <div class="locked-overlay">扫描解锁角色C</div>
+            <button class="scan-btn" data-target="2">扫码解锁</button>
+        </div>
+        <div class="slide">
+            <canvas class="model-canvas" id="model3"></canvas>
+            <div class="locked-overlay">解锁前三个角色查看</div>
+        </div>
+    </div>
 
-<div id="app">
-  <button id="scanButton">扫码解锁</button>
-</div>
+    <div id="pagination">
+        <span class="dot active"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+    </div>
 
-<div id="qr-reader">
-  <button id="closeScan">关闭</button>
-</div>
+    <div id="qr-overlay">
+        <div id="qr-header">
+            <button id="close-scan">‹ 返回</button>
+        </div>
+        <div id="qr-reader"></div>
+        <div class="scan-hint">将二维码放入框内扫描</div>
+    </div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.7/html5-qrcode.min.js"></script>
-<script>
-const app = document.getElementById('app');
-const videos = {};  // 存放动态创建的video元素
-const unlocked = [true, false, false, false];
-const videoSources = [
-  'video1.mp4', 'video2.mp4', 'video3.mp4', 'video4.mp4'
-];
-
-// 初始只显示第一个视频
-createAndShowVideo(0);
-
-// 动态创建视频
-function createAndShowVideo(index) {
-  let slide = document.createElement('div');
-  slide.className = 'slide';
-  let video = document.createElement('video');
-  video.setAttribute('muted', true);
-  video.setAttribute('playsinline', true);
-  video.setAttribute('autoplay', true);
-  video.setAttribute('loop', true);
-  video.style.width = '100%';
-  video.style.height = '100%';
-  if (unlocked[index]) {
-    video.src = videoSources[index];
-    video.play();
-  } else {
-    video.textContent = '请扫码解锁';
-  }
-  slide.appendChild(video);
-  app.appendChild(slide);
-  videos[index] = video;
-}
-
-// 解锁后动态添加src
-function unlockVideo(index) {
-  if (!unlocked[index]) {
-    unlocked[index] = true;
-    if (videos[index]) {
-      videos[index].src = videoSources[index];
-      videos[index].load();
-      videos[index].play();
-    }
-  }
-}
-
-// 扫码逻辑
-const html5QrCode = new Html5Qrcode("qr-reader");
-
-document.getElementById("scanButton").addEventListener("click", () => {
-  document.getElementById("qr-reader").style.display = "block";
-  html5QrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    qrCodeMessage => {
-      console.log(`扫码内容: ${qrCodeMessage}`);
-      if (qrCodeMessage === "unlock2") {
-        createAndShowVideo(1);
-        unlockVideo(1);
-      }
-      if (qrCodeMessage === "unlock3") {
-        createAndShowVideo(2);
-        unlockVideo(2);
-      }
-      if (qrCodeMessage === "unlock4") {
-        createAndShowVideo(3);
-        unlockVideo(3);
-      }
-      html5QrCode.stop();
-      document.getElementById("qr-reader").style.display = "none";
-    },
-    errorMessage => {}
-  ).catch(err => {
-    console.error("扫码失败", err);
-  });
-});
-
-document.getElementById("closeScan").addEventListener("click", () => {
-  html5QrCode.stop();
-  document.getElementById("qr-reader").style.display = "none";
-});
-</script>
-
+    <script src="script.js"></script>
 </body>
 </html>
